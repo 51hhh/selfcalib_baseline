@@ -55,12 +55,33 @@ RUN if [ "$WITH_GTSAM" = "ON" ]; then \
 WORKDIR /swift_vio_ws
 COPY ws/src /swift_vio_ws/src
 
+# --- 补齐 okvis 的嵌套子模块 cmake/DownloadProject（Crascit/DownloadProject） --
+# okvis .gitmodules 引用 https://github.com/Crascit/DownloadProject.git，parentless
+# 快照 bundle 不含子模块内容（仅 gitlink），还原后该目录为空，导致
+# swift_vio/CMakeLists.txt:116 `include(.../DownloadProject.cmake)` 失败。
+# 故把已 vendored 的两文件（pin 至 3a28171，见 docker/vendor/DownloadProject/LICENSE）
+# COPY 覆盖进去。DBoW2 本体仍由 download_project 在 cmake 阶段联网拉取（github 存活）；
+# ORB 词表下载失败为非致命（CMake 有 orbvoc_download_success 守卫，仅回环检测运行时才需）。
+COPY docker/vendor/DownloadProject /swift_vio_ws/src/swift_vio/thirdparty/okvis/cmake/DownloadProject
+
+# --- 打上 selfcalib_baseline 源码补丁 ---------------------------------------
+# 修 Release 下 vio::leftNullspaceAndColumnSpace 的越界写堆 bug（欠观测路标 →
+# rows<=cols → 非正尺寸 resize/block；assert 被 NDEBUG 关闭 → "double free or
+# corruption" 崩溃）。补丁针对 bundle 还原后的 pristine 源码，故在 COPY 之后应用。
+# 详见 docker/patches/*.patch 与 README §排错。
+COPY docker/patches /tmp/patches
+RUN command -v patch >/dev/null || (apt-get update && apt-get install -y --no-install-recommends patch && rm -rf /var/lib/apt/lists/*) ; \
+    cd /swift_vio_ws/src \
+    && for p in /tmp/patches/*.patch; do echo ">> applying $p"; patch -p1 < "$p"; done
+
 # --- catkin 构建 ------------------------------------------------------------
+# 注意：source /opt/ros/melodic/setup.bash 会把 ROS_VERSION 覆盖为 1（ROS1 约定），
+# 故此处用字面量 melodic，不能用 ${ROS_VERSION}（否则 --extend /opt/ros/1 报错）。
 ARG GTSAM_ARGS=""
-RUN source /opt/ros/${ROS_VERSION}/setup.bash \
+RUN source /opt/ros/melodic/setup.bash \
     && catkin init \
     && catkin config --merge-devel \
-    && catkin config --extend /opt/ros/${ROS_VERSION} \
+    && catkin config --extend /opt/ros/melodic \
     && catkin build vio_common swift_vio \
          --cmake-args -DUSE_ROS=ON -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release ${GTSAM_ARGS} \
     && echo "source /swift_vio_ws/devel/setup.bash" >> /root/.bashrc

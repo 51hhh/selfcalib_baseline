@@ -1,0 +1,20 @@
+--- a/vio_common/src/eigen_utils.cpp
++++ b/vio_common/src/eigen_utils.cpp
+@@ -66,7 +66,16 @@
+                         // left nullspace"
+   Eigen::HouseholderQR<Eigen::MatrixXd> qr(A);
+   // don't use column pivoting because in that case Q*R-A!=0
+-  Eigen::MatrixXd Q = qr.householderQ();
++  Eigen::MatrixXd Q = qr.householderQ();  // rows x rows
++
++  // selfcalib_baseline 补丁（防御）：Release 下上面的 assert 被 NDEBUG 关闭。
++  // 若 rows<=cols（欠定），rows-cols<=0 传给 resize/block 会越界写堆，最终以
++  // "double free or corruption" 崩溃。此处安全返回空左零空间，绝不越界。
++  if (rows <= cols) {
++    Q2->resize(rows, 0);  // 左零空间为空
++    *Q1 = Q;              // rows x rows 正交阵充当列空间占位
++    return;
++  }
+ 
+   Q2->resize(rows, rows - cols);
+   *Q2 = Q.block(0, cols, rows, rows - cols);

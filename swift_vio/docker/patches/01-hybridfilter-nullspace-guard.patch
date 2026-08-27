@@ -1,0 +1,17 @@
+--- a/swift_vio/src/swift_vio/HybridFilter.cpp
++++ b/swift_vio/src/swift_vio/HybridFilter.cpp
+@@ -2744,6 +2744,14 @@
+       Eigen::Vector4d homogeneousPoint =
+           Eigen::Map<Eigen::Vector4d>(pointLandmark.data(), 4);
+       // jhuai: We assume that H_fi has full column rank. That is, the landmark is well observed.
++      // selfcalib_baseline 补丁：欠观测路标 (H_fi 行数<=列数=3) 会让
++      // leftNullspaceAndColumnSpace 以非正的 rows-cols 做 resize/block 越界写堆
++      // ——Release 下 assert(rows>cols) 被 NDEBUG 关闭，故表现为 "double free or
++      // corruption" 崩溃。此处显式跳过该路标（左零空间为空，无法边缘化）。
++      if (H_fi.rows() <= H_fi.cols()) {
++        pit->second.setMeasurementFate(FeatureTrackStatus::kComputingJacobiansFailed);
++        continue;
++      }
+       vio::leftNullspaceAndColumnSpace(H_fi, &Q2, &Q1);
+       z_o = Q2.transpose() * r_i;
+       H_o = Q2.transpose() * H_i;
