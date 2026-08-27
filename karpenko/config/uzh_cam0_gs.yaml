@@ -1,0 +1,11 @@
+# UZH-FPV snapdragon cam0（全局快门 GS，640x480，鱼眼 equidistant）
+# 本地数据：../../../real_frames/uzh_cam0/{cam0/,video_ts.txt,imu.txt}
+# 内参取自 rscalib/test/real_equiv/camera_uzh_real.yaml
+# 验证判据：GS 相机 => 反解 t_RS(ts) 应 ≈ 0。
+cam0:
+  camera_model: pinhole
+  distortion_model: equidistant
+  intrinsics: [277.9, 277.7, 319.0, 241.9]
+  distortion_coeffs: [-0.0126, 0.0455, -0.0684, 0.0339]
+  resolution: [640, 480]
+  rolling_shutter: false
