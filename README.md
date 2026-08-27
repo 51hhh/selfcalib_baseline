@@ -16,8 +16,9 @@
 - ✅ **阶段 1 Ctrl-VIO（t_RS）实测完成**：`/cam1` RS **line_delay=29.899 µs/行（+1.44%）**，整帧 t_RS=0.030616 s。
 - ✅ **阶段 2 swift_vio/KSWF（t_RS+td）实测完成**：单目 cam1 RS **t_r=0.02735 s（26.71 µs/行, −9.4%）、
   td=0.01539 s**；cam0 GS 对照 t_r≈0、td≈0。上游三处堆损坏 bug 已定位，可用配方＝单目+ds1+纯MSCKF（见 `swift_vio/README.md` §6）。
-- ✅ **阶段 4 Karpenko（纯陀螺 t_RS+td）实测完成**：合成自检 ts 误差 0；实测立体差分 **t_RS≈0.0292 s（~3%）**
-  （近景大平移视差污染绝对 t_RS，共模作差抵消——纯旋转法固有限制，非实现缺陷，见 `karpenko/README.md`）。
+- ✅ **阶段 4 Karpenko（纯陀螺 t_RS+td）实测完成**：非循环合成自检 ts/td 误差 0；实测立体差分
+  **t_RS≈0.03057 s（+1.28%）**、td 双目一致（≈−9.5ms）。**（review 修正旋转手性 bug：objective 由
+  `Rj·Riᵀ` 改 `Rjᵀ·Ri`，差分精度由旧版 −3.2% 提升到 +1.28%，见 `karpenko/README.md` §1/§4b。）**
 - ⛔ **阶段 3 OpenVINS / MINS 本轮不实现**（用户明确暂缓；且开源版无 RS 模型，仅能交叉核对 td）。
 
 **跨方法 t_RS 复现对比（TUM-RSVI seq1，真值 line_delay 29.4737 µs/行 = 整帧 0.03018 s）**：
@@ -26,10 +27,12 @@
 |---|---|---|---|---|---|
 | **Ctrl-VIO** | 连续时间 B 样条 VIO | **29.899 µs/行** / 0.030616 s | **+1.44 %** | ❌ 锁死 | 最强（完整 VIO），**t_RS 基准** |
 | **swift_vio/KSWF** | 单目 MSCKF 滤波 | **26.71 µs/行** / 0.02735 s | **−9.4 %** | **0.01539 s** ✅ | 单目弱（立体/SLAM 因 bug 关闭） |
-| **Karpenko** | 纯陀螺重投影（自研） | 差分 **0.0292 s** | **~3 %** | ✅ 自估 | 纯旋转，近景大视差受限 |
+| **Karpenko** | 纯陀螺重投影（自研） | 差分 **0.03057 s** | **+1.28 %** | ✅ 双目一致 −9.5ms | 纯旋转，近景大视差受限（差分抵消） |
 
-> 三法 t_RS **同号、同数量级**，互为佐证；精度序 Ctrl-VIO(1.4%) > Karpenko(3%) > swift_vio 单目(9.4%)，
-> 与各法可用观测强度一致。td 由 swift_vio / Karpenko 给出（Ctrl-VIO 锁死）。各法细节见对应子目录 README。
+> 三法 t_RS **同号、同数量级**，互为佐证；精度：Ctrl-VIO(+1.44%) 与 Karpenko 差分(+1.28%) 同档、
+> swift_vio 单目(−9.4%) 稍弱（立体/SLAM 因 bug 关闭）。注：Karpenko 是**差分**估计（需 GS 参考目共模抵消视差），
+> 非独立绝对量；其绝对 ts 受平移视差偏置（见 `karpenko/README.md` §4b）。td 由 swift_vio / Karpenko 给出
+> （Ctrl-VIO 锁死）。各法细节见对应子目录 README。
 
 ---
 
@@ -196,14 +199,15 @@ selfcalib_baseline/
 |---|---|---|---|---|
 | TUM-RSVI 右目 cam1 (RS) | ≈0.03018s（29.47µs/行） | 数据集标定值 | 1,2 | ✅ Ctrl-VIO 29.899µs(+1.44%)；swift_vio 26.71µs(−9.4%,td=15.4ms) |
 | TUM-RSVI 左目 cam0 (GS) | ≈0 | ≈0 | 2 | ✅ swift_vio t_r≈−0.19ms、td≈0.13ms（对照通过） |
-| TUM-RSVI 立体差分 (RS−GS) | ≈0.03018s | — | 4 | ✅ Karpenko t_RS≈0.0292s（~3%，共模差分） |
-| Karpenko 合成自检 | =注入值 | =注入值 | 4 | ✅ ts 误差 0、td 误差 ~1µs |
+| TUM-RSVI 立体差分 (RS−GS) | ≈0.03018s | — | 4 | ✅ Karpenko t_RS≈0.03057s（+1.28%，共模差分） |
+| Karpenko 合成自检（非循环） | =注入值 | =注入值 | 4 | ✅ ts 误差 0、td 误差 0（物理约定生成，校验手性） |
 | real_frames/uzh_cam0 (GS) | ≈0 | ≈UZH 标定值 | 2,4 (sanity) | 未跑（可选） |
 | kalibr_baseline 仿真注入 | =注入档 | =注入 td | 1,2,4 | 未跑（可选） |
 | LiU GoPro-Gyro | ≈0.0317s | 方法自估 | 4 | 未下载（可选） |
 
-跨方法一致性：三法 t_RS 同号同量级（Ctrl-VIO 29.9 / Karpenko 差分 ~29.2 / swift_vio 单目 26.7 µs/行等效），
-精度序与各法可用观测强度一致；td 由 swift_vio(15.4ms)、Karpenko 给出（Ctrl-VIO 锁死无输出）。
+跨方法一致性：三法 t_RS 同号同量级（Ctrl-VIO 29.9 / Karpenko 差分 29.85 / swift_vio 单目 26.7 µs/行等效），
+Ctrl-VIO 与 Karpenko 差分同精度档（±1.3~1.4%）、swift_vio 单目稍弱；td 由 swift_vio(15.4ms)、
+Karpenko(双目一致 −9.5ms) 给出（Ctrl-VIO 锁死无输出）。
 
 ---
 

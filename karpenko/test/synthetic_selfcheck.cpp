@@ -2,8 +2,10 @@
 // 注入已知 ts_true / td_true / gyro_bias_true，用 GyroIntegrator 生成一致的“真值旋转”，
 // 据此合成卷帘特征观测（bearing 对），再用 calibrate() 反解，断言误差足够小。
 //
-// 生成与求解共用同一套旋转约定（bpred = Rj·Riᵀ·bi），故真值处残差恒为 0，
-// 偏离真值残差单调增大——正好检验坐标下降能否收敛回注入值。
+// ★关键（非循环自检）：观测按【物理约定】生成 —— GyroIntegrator 右乘体系角速率产出
+//   R(t)=R_wc（相机->世界），固定世界方向 c 在相机系的 bearing 为 b = R(t)^T·c。
+//   求解器内部预测 bpred = Rj^T·Ri·bi（objective.cpp）。二者旋转手性必须一致才能收敛回
+//   注入值——故本自检能真正校验旋转约定的正确性（若把 objective 写成 Rj·Ri^T，此处会 FAIL）。
 //
 // 返回 0 = 通过；非 0 = 失败。无 gtest 依赖。
 #include <cmath>
@@ -56,13 +58,13 @@ int main() {
     FrameObs fo; fo.ti = ti; fo.tj = tj;
     for (int k = 0; k < npts; ++k) {
       double vi = urow(rng), vj = urow(rng);   // 两帧中的像素行
-      // 世界固定方向 c（近光轴），使得 bi=Ri·c, bj=Rj·c => bj = Rj·Riᵀ·bi
+      // 世界固定方向 c，物理约定 bearing = R(t)^T·c（R=R_wc）=> bj = Rj^T·Ri·bi
       Eigen::Vector3d c(uang(rng), uang(rng), 1.0);
       c.normalize();
       double ti_row = ti + ts_true * (vi / h);
       double tj_row = tj + ts_true * (vj / h);
-      Eigen::Vector3d bi = (truth.R(ti_row, td_true) * c).normalized();
-      Eigen::Vector3d bj = (truth.R(tj_row, td_true) * c).normalized();
+      Eigen::Vector3d bi = (truth.R(ti_row, td_true).transpose() * c).normalized();
+      Eigen::Vector3d bj = (truth.R(tj_row, td_true).transpose() * c).normalized();
       if (bi.z() <= 1e-6 || bj.z() <= 1e-6) continue;
       TrackedPoint tp; tp.vi = vi; tp.vj = vj; tp.bi = bi; tp.bj = bj;
       fo.pts.push_back(tp);
