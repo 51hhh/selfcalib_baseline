@@ -52,9 +52,10 @@ struct CalibResult {
   double td = 0;      // 相机-陀螺时间偏移（秒），gyro_ts = video_ts + td
   double f = 0;       // 焦距（像素；若固定 = fx）
   Eigen::Vector3d gyro_bias = Eigen::Vector3d::Zero();
-  Eigen::Matrix3d R_cam_gyro = Eigen::Matrix3d::Identity();  // 选定的轴排列/符号
+  Eigen::Matrix3d R_cam_gyro = Eigen::Matrix3d::Identity();  // 选定的轴排列/符号(+微旋转精修)
   double final_cost = 0;
   double rms_px = 0;
+  double inlier_ratio = 1.0;  // 鲁棒内点占比（huber_delta>0 时有意义）
 };
 void writeResult(const std::string& path, const CameraModel& cam, const CalibResult& r);
 

@@ -1,11 +1,14 @@
 #include "objective.h"
+#include <cmath>
 
 namespace karpenko {
 
 CostResult evalCost(const GyroIntegrator& gyro, const std::vector<FrameObs>& obs,
-                    double ts, double td, double f, int h) {
+                    double ts, double td, double f, int h, double huber_delta) {
   CostResult out;
   const double invh = (h > 0) ? 1.0 / (double)h : 0.0;
+  const bool robust = huber_delta > 0.0;
+  const double d2 = huber_delta * huber_delta;
   for (const auto& fo : obs) {
     for (const auto& p : fo.pts) {
       double ti_row = fo.ti + ts * (p.vi * invh);
@@ -21,8 +24,15 @@ CostResult evalCost(const GyroIntegrator& gyro, const std::vector<FrameObs>& obs
       double px = bpred.x() / bpred.z(), py = bpred.y() / bpred.z();
       double mx = p.bj.x() / p.bj.z(), my = p.bj.y() / p.bj.z();
       double rx = f * (px - mx), ry = f * (py - my);
-      out.J += rx * rx + ry * ry;
+      double e2 = rx * rx + ry * ry;
+      out.sse += e2;
       out.n += 2;
+      if (robust) {
+        if (e2 <= d2) { out.J += e2; out.n_inl += 1; }
+        else          { out.J += 2.0 * huber_delta * std::sqrt(e2) - d2; } // Huber 线性段
+      } else {
+        out.J += e2; out.n_inl += 1;
+      }
     }
   }
   return out;

@@ -1,7 +1,12 @@
 // main.cpp —— Karpenko 复现 CLI。
 // 用法：
 //   karpenko_calib --cam cam.yaml --frames <dir> --ts video_ts.txt --imu imu.txt \
-//                  [--out result.yaml] [--enum-perm] [--ts-init S] [--td-init S]
+//                  [--out result.yaml] [--enum-perm] [--ts-init S] [--td-init S] \
+//                  [--refine-rot] [--huber <px>] [--homography]
+// 提升开关（有效域=旋转主导/远景数据，平移主导数据默认关，见 README §4b）：
+//   --refine-rot   在最优离散轴排列附近再优化 3 维 so(3) 微旋转（去 T_SC 非轴对齐偏置）
+//   --huber <px>   残差改 Huber 鲁棒核，降权近景大视差外点
+//   --homography   前端外点剔除改用单应 RANSAC（默认基础矩阵 F，适合含平移数据）
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -29,7 +34,8 @@ int main(int argc, char** argv) {
   if (cam_yaml.empty() || frames_dir.empty() || ts_file.empty() || imu_file.empty()) {
     std::fprintf(stderr,
       "用法: %s --cam cam.yaml --frames <dir> --ts video_ts.txt --imu imu.txt "
-      "[--out result.yaml] [--enum-perm] [--ts-init S] [--td-init S]\n", argv[0]);
+      "[--out result.yaml] [--enum-perm] [--ts-init S] [--td-init S] "
+      "[--refine-rot] [--huber <px>] [--homography]\n", argv[0]);
     return 2;
   }
 
@@ -41,8 +47,11 @@ int main(int argc, char** argv) {
               frames.size(), ts.size(), imu.size(), cam.width, cam.height, (int)cam.rolling);
 
   // 1. 特征跟踪（原始像素对）
-  std::vector<RawPair> raw = trackSequence(frames, ts);
-  std::printf("[karpenko] tracked frame-pairs=%zu\n", raw.size());
+  TrackerOptions topt;
+  topt.use_homography = flag(argc, argv, "--homography");
+  std::vector<RawPair> raw = trackSequence(frames, ts, topt);
+  std::printf("[karpenko] tracked frame-pairs=%zu  (geom=%s)\n",
+              raw.size(), topt.use_homography ? "homography" : "fundamental");
 
   // 2. 去畸变为 bearing，组装 FrameObs
   std::vector<FrameObs> obs;
@@ -67,9 +76,14 @@ int main(int argc, char** argv) {
   // 3. 标定
   CalibConfig cfg;
   cfg.enumerate_permutations = flag(argc, argv, "--enum-perm");
+  cfg.refine_rotation = flag(argc, argv, "--refine-rot");
   std::string tsi = arg(argc, argv, "--ts-init"), tdi = arg(argc, argv, "--td-init");
+  std::string hub = arg(argc, argv, "--huber");
   if (!tsi.empty()) cfg.ts_init = std::stod(tsi);
   if (!tdi.empty()) cfg.td_init = std::stod(tdi);
+  if (!hub.empty()) cfg.huber_delta = std::stod(hub);
+  std::printf("[karpenko] opts: enum_perm=%d refine_rot=%d huber=%.2fpx\n",
+              (int)cfg.enumerate_permutations, (int)cfg.refine_rotation, cfg.huber_delta);
   CalibResult r = calibrate(imu, obs, cam.fx, cam.height, cfg);
 
   std::printf("\n===== Karpenko 结果 =====\n");
@@ -78,7 +92,8 @@ int main(int argc, char** argv) {
   std::printf("  td           = %.6f s\n", r.td);
   std::printf("  gyro_bias    = [%.5f %.5f %.5f] rad/s\n",
               r.gyro_bias.x(), r.gyro_bias.y(), r.gyro_bias.z());
-  std::printf("  rms reproj   = %.4f px\n", r.rms_px);
+  std::printf("  rms reproj   = %.4f px  (原始SSE)\n", r.rms_px);
+  std::printf("  inlier ratio = %.1f%%  (残差<=huber_delta)\n", r.inlier_ratio * 100.0);
   std::printf("  final cost   = %.4f\n", r.final_cost);
   writeResult(out, cam, r);
   std::printf("  -> 写入 %s\n", out.c_str());

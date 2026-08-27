@@ -55,3 +55,8 @@ enable_testing()
 add_executable(karpenko_selfcheck test/synthetic_selfcheck.cpp)
 target_link_libraries(karpenko_selfcheck PRIVATE karpenko_core)
 add_test(NAME synthetic_selfcheck COMMAND karpenko_selfcheck)
+
+# 连续 R_cam_gyro 微旋转精修自检
+add_executable(karpenko_rot_selfcheck test/synthetic_rot_selfcheck.cpp)
+target_link_libraries(karpenko_rot_selfcheck PRIVATE karpenko_core)
+add_test(NAME synthetic_rot_selfcheck COMMAND karpenko_rot_selfcheck)

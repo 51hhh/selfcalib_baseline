@@ -34,8 +34,11 @@ std::vector<RawPair> trackSequence(const std::vector<std::string>& frames,
     }
     if (a.size() < 8) continue;
 
+    // 外点剔除：含平移数据用基础矩阵（对极几何良定义）；旋转主导/远景数据用单应
+    // （纯旋转诱导无穷单应 K·R·K⁻¹，与假设自洽且天然剔大视差点，F 在纯旋转下退化）。
     std::vector<uchar> inl;
-    cv::findFundamentalMat(a, b, cv::FM_RANSAC, opt.ransac_thresh, 0.99, inl);
+    if (opt.use_homography) cv::findHomography(a, b, cv::RANSAC, opt.ransac_thresh, inl);
+    else cv::findFundamentalMat(a, b, cv::FM_RANSAC, opt.ransac_thresh, 0.99, inl);
     RawPair rp; rp.i = i; rp.j = i + 1; rp.ti = ts[i]; rp.tj = ts[i + 1];
     for (size_t k = 0; k < a.size(); ++k)
       if (k < inl.size() && inl[k]) { rp.pi.push_back(a[k]); rp.pj.push_back(b[k]); }

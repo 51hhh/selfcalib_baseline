@@ -18,10 +18,17 @@ struct FrameObs {
   std::vector<TrackedPoint> pts;
 };
 
-struct CostResult { double J = 0; long n = 0; };  // n = 残差分量数（用于 RMS）
+struct CostResult {
+  double J = 0;     // 优化用代价（huber_delta>0 时为鲁棒代价，否则=sse）
+  long   n = 0;     // 残差分量数（=2×有效点数，用于 RMS）
+  double sse = 0;   // 原始平方残差和（不受鲁棒核影响；RMS=sqrt(sse/n)）
+  long   n_inl = 0; // 鲁棒内点数（像素残差 <= huber_delta）；huber_delta<=0 时=有效点数
+};
 
 // 用已 build 的 integrator 计算总代价。ts 整帧读出时间, td 时延, f 焦距(像素), h 图高。
+// huber_delta>0 时对每点像素残差范数施加 Huber 鲁棒核（单位 px），压制近景视差外点；
+// <=0 则为普通平方损失。
 CostResult evalCost(const GyroIntegrator& gyro, const std::vector<FrameObs>& obs,
-                    double ts, double td, double f, int h);
+                    double ts, double td, double f, int h, double huber_delta = 0.0);
 
 }  // namespace karpenko
