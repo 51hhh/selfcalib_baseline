@@ -1,0 +1,42 @@
+### Ctrl-VIO 配置种子（TUM-RSVI） —— 派生自上游 config/ct_odometry_tumrs.yaml
+### 路径按"运行时 bind-mount 本 config 目录到容器 /catkin_ctrlvio/src/Ctrl-VIO/config"约定填写，
+### 因此改参数无需重建镜像（见 run_ctrlvio.sh）。
+
+### config path（容器内路径；本 config 目录 bind-mount 到 /work/config，见 run_ctrlvio.sh）
+### 注意：节点 param "config_path" 传的是本 yaml 文件路径；下面这个 config_path 键是 config 目录，
+### 源码按 cam_yaml_full = config_path + cam_yaml 拼接（odometry_manager.cpp:58/69）。
+log_path: /work/results
+config_path: /work/config
+imu_yaml: /tumrs/imu_tumrs.yaml
+cam_yaml: /tumrs/cam_tumrs.yaml
+
+### bag param（bag_path 由 launch 的 arg 覆盖；此处留空即用本行）
+bag_path: /work/datasets/tum_rsvi/dataset-seq1.bag
+bag_start: 0
+bag_durr: -1
+
+### spline param
+knot_distance: 0.05
+
+### noise & weight（TUM-RSVI BMI160，沿用上游）
+gyroscope_noise_density: 4.0e-3
+gyroscope_random_walk: 2.0e-5
+accelerometer_noise_density: 8.0e-2
+accelerometer_random_walk: 4.0e-4
+image_weight: 800.0
+
+### cam2imu（TUM-RSVI 标定外参；time_offset 仅作输入常量，代码锁死不优化——拿不到 td）
+CameraExtrinsics:
+    time_offset: 0.000
+    Trans: [0.00699407, -0.0570823, -0.0422772]
+    Rot: [ -0.00276873, -0.999936, -0.0110011,
+               -0.999987, 0.00281495, -0.00418819,
+               0.00421888, 0.0109894, -0.999931]
+
+### line delay 在线标定（本项目核心输出）
+### 输出为"每行延时" line_delay（秒）；整帧 t_RS = line_delay × image_height(1024)
+### TUM-RSVI 真值参考：每行 ≈ 29.4737us，整帧 ≈ 0.03018s
+ld_init: 0.0            # 从 0 起标，验证鲁棒收敛（上游注释给的真值 0.0000294737）
+fix_ld: false           # false=在线优化 line delay；true=固定
+ld_lower: 0.0
+ld_upper: 0.000035      # 上界 35us/行

@@ -1,0 +1,39 @@
+%YAML:1.0
+### TUM-RSVI 相机配置种子（右目 = 卷帘快门 RS，用于标定 line delay）
+### 数值来自上游 Ctrl-VIO config/tumrs/cam_tumrs.yaml（TUM-RSVI 标定值）
+### 注意：RS 目 image_topic 为 /cam1/image_raw；若跑 GS 目(左目 /cam0/image_raw)做 sanity，
+### 期望标出 line delay ≈ 0。
+
+### common parameters
+image_topic: /cam1/image_raw
+
+### camera calibration
+model_type: KANNALA_BRANDT
+camera_name: cam1
+image_width: 1280
+image_height: 1024
+projection_parameters:
+   k2: 0.019327620961435945
+   k3: 0.006784242994724914
+   k4: -0.008658628531456217
+   k5: 0.0051893686731546585
+   mu: 739.1654756101043
+   mv: 739.1438452683457
+   u0: 625.826167006398
+   v0: 517.3370973594253
+focal_length: 740
+
+### feature traker parameters
+max_cnt: 150
+min_dist: 25
+freq: 10
+F_threshold: 1.0
+show_track: 1
+equalize: 1
+fisheye: 0
+flow_back: 1
+fb_threshold: 0.5
+reject_wf: 0
+
+### optimization parameters
+keyframe_parallax: 10.0

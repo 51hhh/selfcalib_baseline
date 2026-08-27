@@ -1,0 +1,39 @@
+# Ctrl-VIO (APRIL-ZJU) 复现镜像 —— ROS1 Melodic (Ubuntu 18.04)
+# 从自包含 bundle 还原源码（provenance：APRIL-ZJU/Ctrl-VIO@eb95020 "upload code" 2023-08-23，
+# 无父根快照 tree=3c7f435… 与上游逐位一致），catkin_make 编译。
+#
+# 构建上下文 = ctrlvio/（含 docker/bundles/ctrlvio.bundle）
+#   sudo docker build -t ctrlvio:melodic -f docker/Dockerfile.melodic .
+# 见 docker/build.sh。
+#
+# 依赖（上游 README）：ROS Melodic / Eigen3 / Ceres 1.14 / OpenCV 3.3 / yaml-cpp。
+# Melodic 桌面版自带 OpenCV 3.2/3.4 与 Eigen；Ceres 用 18.04 apt 的 1.14。
+# basalt-headers 与 Sophus 已 vendored 在源码 src/（sophus_lib、spline），无需额外安装。
+
+FROM osrf/ros:melodic-desktop-full
+
+SHELL ["/bin/bash", "-c"]
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git build-essential cmake \
+        libeigen3-dev libyaml-cpp-dev \
+        libceres-dev libgoogle-glog-dev libgflags-dev \
+        libopencv-dev \
+        python-catkin-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# 从 bundle 还原 Ctrl-VIO 源码到 catkin 工作区
+WORKDIR /catkin_ctrlvio/src
+COPY docker/bundles/ctrlvio.bundle /tmp/ctrlvio.bundle
+RUN git clone /tmp/ctrlvio.bundle Ctrl-VIO && rm -f /tmp/ctrlvio.bundle
+
+# 编译
+WORKDIR /catkin_ctrlvio
+RUN source /opt/ros/melodic/setup.bash && catkin_make -DCMAKE_BUILD_TYPE=Release
+
+# 容器内运行前 source
+RUN echo "source /opt/ros/melodic/setup.bash" >> /root/.bashrc \
+    && echo "source /catkin_ctrlvio/devel/setup.bash" >> /root/.bashrc
+
+WORKDIR /catkin_ctrlvio

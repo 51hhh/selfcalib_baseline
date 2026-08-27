@@ -1,0 +1,5 @@
+### TUM-RSVI IMU 配置种子（BMI160，200Hz，六轴）
+### 数值来自上游 Ctrl-VIO config/tumrs/imu_tumrs.yaml
+imu_topic: /imu0
+imu_excite_threshold: 0.5
+gravity_mag: 9.80766
