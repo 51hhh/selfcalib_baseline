@@ -1,13 +1,10 @@
 %YAML:1.0
 # ============================================================================
-# selfcalib_baseline / swift_vio —— TUM-RSVI 联合自标定配置种子
-# 派生自恢复源码 config/config_tum_rs_640_50_20_radtan.yaml
-#   (swift_vio master d502c14, SWH 快照 07262ec, 2023-06-28)
-# 与上游唯一区别：打开 td 与 rolling-shutter readout 的在线自标定
-#   sigma_td: 0.0 -> 5e-3   （>0 即估计相机-IMU 时间偏移 td）
-#   sigma_tr: 0.0 -> 5e-3   （>0 即估计卷帘逐行读出时间 t_r）
-# image_readout_time: 0.03018 s 是整帧读出初值 = 29.4737us/行 × 1024 行（TUM-RSVI 真值）
-# 立体双目：cam0=GS 参照(应标出 readout≈0)、cam1=RS(应标出≈0.03018s)。
+# selfcalib_baseline / swift_vio —— TUM-RSVI 单目 cam0(全局快门 GS) 参照对照配置
+# 负样本/对照：cam0 是全局快门，逐行读出真值 ≈ 0。这里把读出初值同样设成
+# 0.03018s（与 RS cam1 一致），若自标定把 cam0 读出收敛到 ≈0，即证明该方法
+# 确实在“测量传感器读出”而非套用初值 —— 与 karpenko 的 GS sanity 思路一致。
+# MSCKF-only(maxInStateLandmarks:0) + down_scale:1，绕开 SLAM 入状态与降采样两处上游堆损坏。
 # ============================================================================
 cameras:
      - {T_SC:
@@ -24,25 +21,9 @@ cameras:
         projection_opt_mode: FIXED,
         extrinsic_opt_mode: FIXED,
         image_delay: 0.0,
-        image_readout_time: 0.0}      # cam0=全局快门 GS，读出时间真值≈0（参照，应自标出≈0）
+        image_readout_time: 0.03018}
 
-     - {T_SC:
-        [-0.00263992, -0.99994046, -0.01058822,  0.00714426,
-         -0.99999511,  0.00265749, -0.00164605, -0.05834858,
-          0.00167409,  0.01058382, -0.99994259, -0.04382107,
-          0.0,          0.0,          0.0,          1.0],
-        image_dimension: [1280, 1024],
-        distortion_coefficients: [-0.2685987323818534, 0.06665333658861204, 0.00033499404566396515, -0.0003568775353808604],
-        distortion_type: radialtangential,
-        focal_length: [734.9289188713706, 734.9347165546812],
-        principal_point: [624.6746701596509, 516.0970388726328],
-        down_scale: 1,
-        projection_opt_mode: FIXED,
-        extrinsic_opt_mode: FIXED,
-        image_delay: 0.0,
-        image_readout_time: 0.03018}  # cam1=卷帘 RS，整帧读出真值 0.03018s
-
-monocular_input: false
+monocular_input: true
 
 camera_params:
     camera_rate: 20
@@ -54,8 +35,8 @@ camera_params:
     sigma_focal_length: 0.0
     sigma_principal_point: 0.0
     sigma_distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
-    sigma_td: 5e-3     # >0 : 在线估计 td（相机-IMU 时间偏移）
-    sigma_tr: 5e-3     # >0 : 在线估计 t_r（卷帘逐行读出时间）
+    sigma_td: 5e-3
+    sigma_tr: 5e-3
 
 imu_params:
     a_max: 176.0
@@ -106,7 +87,7 @@ point_landmark:
     minTrackLength: 3
     minTrackLengthForSlam: 7
     maxHibernationFrames: 3
-    maxInStateLandmarks: 50
+    maxInStateLandmarks: 0
     maxMarginalizedLandmarks: 50
 
 pose_graph:
@@ -122,7 +103,7 @@ detection_options:
     octaves: 0
     maxNoKeypoints: 400
 
-imageDelay: 0.0   # td 初值（VISensor 为 0；自定义采集需标定）
+imageDelay: 0.0
 
 displayImages: false
 useDriver: false
@@ -148,7 +129,7 @@ rankTolerance: 1.0
 landmarkDistanceThreshold: 20.0
 outlierRejection: 8.0
 retriangulationThreshold: 1.0e-3
-addBetweenStereoFactors: 1
+addBetweenStereoFactors: 0
 betweenRotationPrecision: 0.0
 betweenTranslationPrecision: 100
 relinearizeThreshold: 1.0e-2

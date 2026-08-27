@@ -26,11 +26,21 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER="${DOCKER:-sudo docker}"
 IMAGE="${IMAGE:-swift_vio:melodic}"
 
-BAG="${1:?用法: run_swift_vio.sh <bag路径> [config] [cam0] [cam1] [imu]}"
-CONFIG="${2:-config/config_tum_rs_calib.yaml}"
-CAM0="${3:-/cam0/image_raw}"
-CAM1="${4:-/cam1/image_raw}"
+# 默认＝实测可用配方：单目 cam1(RS) + MSCKF + down_scale:1（见 config 文件头 §排错）。
+# 立体 config_tum_rs_calib.yaml 因上游立体匹配器越界写堆会崩，仅作“意图配置”留档。
+BAG="${1:?用法: run_swift_vio.sh <bag路径> [config] [cam0] [cam1(留空=单目)] [imu]}"
+CONFIG="${2:-config/config_tum_rs_cam1_mono.yaml}"
+CAM0="${3:-/cam1/image_raw}"
+CAM1="${4:-}"
 IMU="${5:-/imu0}"
+
+# 单目：把 CAM1 传空串（如 monocular_input:true 的 cam1 单目变体），
+# camera_topics 只留一个话题，绕开 okvis 立体匹配器（见 config §排错）。
+if [ -z "$CAM1" ]; then
+  CAM_TOPICS="$CAM0"
+else
+  CAM_TOPICS="$CAM0,$CAM1"
+fi
 
 [ -f "$BAG" ]            || { echo "找不到 bag: $BAG" >&2; exit 1; }
 [ -f "$HERE/$CONFIG" ]   || { echo "找不到 config: $HERE/$CONFIG" >&2; exit 1; }
@@ -46,17 +56,20 @@ BAGBASE="$(basename "$BAG")"
 echo ">> swift_vio 离线标定"
 echo "   bag    : $BAG"
 echo "   config : $CONFIG"
-echo "   topics : $CAM0 , $CAM1 , $IMU"
+echo "   topics : $CAM_TOPICS , $IMU"
 echo "   output : $OUTDIR/  (dump_output_option=3 -> 全部标定量 csv)"
 
-$DOCKER run --rm -it \
+# 交互终端才加 -it；无 tty（后台/CI）时省略，避免 "input device is not a TTY"
+TTY_FLAGS=""; [ -t 0 ] && [ -t 1 ] && TTY_FLAGS="-it"
+$DOCKER run --rm $TTY_FLAGS \
   -v "$HERE":/work \
   -v "$BAGDIR":/data \
   "$IMAGE" bash -lc "
     source /swift_vio_ws/devel/setup.bash && cd /work &&
+    ( roscore >/tmp/roscore.log 2>&1 & ) && sleep 5 &&
     rosrun swift_vio swift_vio_node_synchronous /work/$CONFIG \
       --bagname=/data/$BAGBASE \
-      --camera_topics='$CAM0,$CAM1' \
+      --camera_topics='$CAM_TOPICS' \
       --imu_topic='$IMU' \
       --load_input_option=1 \
       --dump_output_option=3 \
