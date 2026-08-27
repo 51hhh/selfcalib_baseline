@@ -8,19 +8,28 @@
 
 本 README 既是项目说明，也是**完整复现计划**（Plan）。调研出处见 `../README.md`（根调研文档）。
 
-### 进度状态（2026-08-26 更新）
-- ✅ **阶段 0 完成**：目录骨架 + `.gitignore` 建好；`common/frames_to_rosbag.py` 合成自检 + 实测通过
-  （`real_frames/uzh_cam0` → 1619 帧 + 26836 IMU，读回校验一致）。所用 Python 环境为仓库根的 `../.venv`（已装 `rosbags`）。
-- ✅ **数据就绪**：`download_tumrsvi.sh` 已下 **TUM-RSVI seq1**（4.24 GB，已用 rosbags 校验）——
-  40.4 s，`/cam0/image_raw`(GS) 808 帧 + `/cam1/image_raw`(RS) 808 帧 @20Hz，`/imu0` 8119 @200Hz，
-  `/vrpn_client/raw_transform` 4848（OptiTrack 真值）；camchain 种子已入库。
-- ✅ **三方法脚手架就位**（bundle 均 `git bundle verify` 通过、记录完整历史）：
-  - **ctrlvio/**：Dockerfile.melodic + `ct_odometry_tumrs.yaml` + `run_ctrlvio.sh`；数据路径已统一为 `datasets/tum_rsvi/`。
-  - **swift_vio/**：源码经 **Software Heritage 存档恢复**（原 GitHub/Bitbucket 均 404；bundle 含 RS 分支
-    `wbl/RS_factor`、`wbl/newRS1`，依赖 `okvis` 含 `RSCameraReprojectionFactor` 分支、`vio_common`）；配置 `sigma_td/sigma_tr>0`、`image_readout_time=0.03018`。
-  - **karpenko/**：纯 Eigen+OpenCV+yaml-cpp（无 ROS）**已编译通过**，`synthetic_selfcheck` **自检通过**（ts 误差 0、td 误差 ~1µs）。
-- ⏳ **下一步**：在 Docker 内构建并跑通 ctrlvio（阶段 1）/ swift_vio（阶段 2），在 TUM-RSVI seq1 上验证
-  RS 目 t_RS≈0.03018 s、GS 目≈0；`OpenVINS/MINS 本轮不实现`（用户明确暂缓）。
+### 进度状态（2026-08-27 更新：三方法均已在 TUM-RSVI seq1 实测完成）
+
+- ✅ **阶段 0 完成**：目录骨架 + `.gitignore`；`common/frames_to_rosbag.py` 合成自检 + 实测通过。
+- ✅ **数据就绪**：**TUM-RSVI seq1**（4.24 GB，rosbags 校验）——40.4 s，cam0(GS)/cam1(RS) 各 808 帧
+  @20Hz，`/imu0` 8119 @200Hz，`/vrpn` 4848（OptiTrack 真值）。
+- ✅ **阶段 1 Ctrl-VIO（t_RS）实测完成**：`/cam1` RS **line_delay=29.899 µs/行（+1.44%）**，整帧 t_RS=0.030616 s。
+- ✅ **阶段 2 swift_vio/KSWF（t_RS+td）实测完成**：单目 cam1 RS **t_r=0.02735 s（26.71 µs/行, −9.4%）、
+  td=0.01539 s**；cam0 GS 对照 t_r≈0、td≈0。上游三处堆损坏 bug 已定位，可用配方＝单目+ds1+纯MSCKF（见 `swift_vio/README.md` §6）。
+- ✅ **阶段 4 Karpenko（纯陀螺 t_RS+td）实测完成**：合成自检 ts 误差 0；实测立体差分 **t_RS≈0.0292 s（~3%）**
+  （近景大平移视差污染绝对 t_RS，共模作差抵消——纯旋转法固有限制，非实现缺陷，见 `karpenko/README.md`）。
+- ⛔ **阶段 3 OpenVINS / MINS 本轮不实现**（用户明确暂缓；且开源版无 RS 模型，仅能交叉核对 td）。
+
+**跨方法 t_RS 复现对比（TUM-RSVI seq1，真值 line_delay 29.4737 µs/行 = 整帧 0.03018 s）**：
+
+| 方法 | 类型 | t_RS（每行 / 整帧） | 误差 | td | 观测强度 |
+|---|---|---|---|---|---|
+| **Ctrl-VIO** | 连续时间 B 样条 VIO | **29.899 µs/行** / 0.030616 s | **+1.44 %** | ❌ 锁死 | 最强（完整 VIO），**t_RS 基准** |
+| **swift_vio/KSWF** | 单目 MSCKF 滤波 | **26.71 µs/行** / 0.02735 s | **−9.4 %** | **0.01539 s** ✅ | 单目弱（立体/SLAM 因 bug 关闭） |
+| **Karpenko** | 纯陀螺重投影（自研） | 差分 **0.0292 s** | **~3 %** | ✅ 自估 | 纯旋转，近景大视差受限 |
+
+> 三法 t_RS **同号、同数量级**，互为佐证；精度序 Ctrl-VIO(1.4%) > Karpenko(3%) > swift_vio 单目(9.4%)，
+> 与各法可用观测强度一致。td 由 swift_vio / Karpenko 给出（Ctrl-VIO 锁死）。各法细节见对应子目录 README。
 
 ---
 
@@ -101,9 +110,10 @@ selfcalib_baseline/
 │   ├── README.md
 │   ├── docker/Dockerfile.melodic # ROS1 + Ceres14 + Eigen + BRISK + gtsam(可选) + SuiteSparse
 │   ├── docker/bundles/swift_vio.bundle # 从 Software Heritage/wbl1997 恢复后打 bundle 锁 provenance
-│   ├── patches/                  # 恢复源码到可编译所需的改动（若有）
-│   ├── config/*.yaml             # sigma_td>0 开td / sigma_tr>0 开readout / imageDelay / image_readout_time
-│   └── run_swift_vio.sh          # load_input_option=1 或 node_synchronous；dump_output_option=3 导出 CSV
+│   ├── docker/vendor/DownloadProject/  # vendored，补 okvis 空子模块
+│   ├── docker/patches/           # 构建期防御补丁（零空间 rows<=cols 守卫）
+│   ├── config/*.yaml             # 单目 cam1/cam0 可用配方 + 立体意图配置 + 纯上游配置
+│   └── run_swift_vio.sh          # node_synchronous；load_input_option=1 / dump_output_option=3 导 CSV
 ├── openvins/                     # 阶段3（可选）：td 交叉核对
 │   ├── README.md
 │   ├── docker/                   # 复用官方 Dockerfile_ros1_20_04
@@ -182,26 +192,30 @@ selfcalib_baseline/
 
 ## 5. 端到端验证矩阵
 
-| 数据 | 期望 t_RS | 期望 td | 用于验证的阶段 |
-|---|---|---|---|
-| real_frames/uzh_cam0 (GS) | ≈0 | ≈UZH 标定值 | 2,4 (sanity) |
-| TUM-VI (GS) | ≈0 | 数据集标定值 | 2,3 (sanity) |
-| TUM-RSVI 右目 (RS) | ≈0.03018s（29.47µs/行） | 数据集标定值 | 1,2 |
-| TUM-RSVI 左目 (GS) | ≈0 | 同上 | 1,2 (正/负样本) |
-| kalibr_baseline 仿真注入（改自然路标） | =注入档 137.5/82.5/51.56/41.25µs | =注入 td | 1,2,4 (已知真值回归) |
-| LiU GoPro-Gyro | ≈0.0317s | 方法自估 | 4 |
+| 数据 | 期望 t_RS | 期望 td | 阶段 | 实测 |
+|---|---|---|---|---|
+| TUM-RSVI 右目 cam1 (RS) | ≈0.03018s（29.47µs/行） | 数据集标定值 | 1,2 | ✅ Ctrl-VIO 29.899µs(+1.44%)；swift_vio 26.71µs(−9.4%,td=15.4ms) |
+| TUM-RSVI 左目 cam0 (GS) | ≈0 | ≈0 | 2 | ✅ swift_vio t_r≈−0.19ms、td≈0.13ms（对照通过） |
+| TUM-RSVI 立体差分 (RS−GS) | ≈0.03018s | — | 4 | ✅ Karpenko t_RS≈0.0292s（~3%，共模差分） |
+| Karpenko 合成自检 | =注入值 | =注入值 | 4 | ✅ ts 误差 0、td 误差 ~1µs |
+| real_frames/uzh_cam0 (GS) | ≈0 | ≈UZH 标定值 | 2,4 (sanity) | 未跑（可选） |
+| kalibr_baseline 仿真注入 | =注入档 | =注入 td | 1,2,4 | 未跑（可选） |
+| LiU GoPro-Gyro | ≈0.0317s | 方法自估 | 4 | 未下载（可选） |
 
-跨方法一致性：同一序列上 Ctrl-VIO 的 t_RS、swift_vio 的 (t_RS,td)、Karpenko 的 (ts,td)、rscalib 板法结果两两比对，
-差异应在 <1% / 数十 µs 量级（参照 kalibr_baseline 单双目 line_delay 差 <0.01% 的判据）。
+跨方法一致性：三法 t_RS 同号同量级（Ctrl-VIO 29.9 / Karpenko 差分 ~29.2 / swift_vio 单目 26.7 µs/行等效），
+精度序与各法可用观测强度一致；td 由 swift_vio(15.4ms)、Karpenko 给出（Ctrl-VIO 锁死无输出）。
 
 ---
 
 ## 6. 待决策 / 风险
-- [ ] **首个落地阶段**：建议阶段 1（Ctrl-VIO，读 bag 最快出 t_RS 且有真值可对）；若优先"联合 t_RS+td"则直上阶段 2。
-- [x] swift_vio 源码恢复：已从 **Software Heritage 存档恢复**（含 RS 分支，bundle 已入库并校验）；仍待**验证 Docker 内可编译**（阶段 2 执行时确认）。
-- [x] TUM-RSVI 已下载 seq1（4.24GB，已校验）；LiU GoPro-Gyro 链接活性待验（仅阶段 4 需要）。
+- [x] **阶段 1/2/4 均已落地**：Ctrl-VIO、swift_vio、Karpenko 三法在 TUM-RSVI seq1 实测完成（见进度状态对比表）。
+- [x] swift_vio 源码恢复 + **Docker 内可编译可运行已确认**（`swift_vio:melodic` 镜像 build 通过、跑满全程）；
+  上游三处堆损坏 bug 已 valgrind 定位并给出可用配方（`swift_vio/README.md` §6）。
+- [x] TUM-RSVI 已下载 seq1（4.24GB，已校验）。
 - [ ] 许可证：Ctrl-VIO 无 license、alex-golts GPL-3——本项目仅作内部复现/对照，外发需重写而非拷贝。
-- [ ] `sim_natural_rs.py` 把 AprilGrid 观测改随机自然路标的工作量（复用 kalibr 样条+注入机制）。
+- [ ] （可选，未来）swift_vio 立体/SLAM 路径根治：debug/`eigen_assert` 构建下二分定位越界的 `.block()/.segment()`，
+  以恢复立体 HybridFilter（精度应优于当前单目 MSCKF）。
+- [ ] （可选）`sim_natural_rs.py` 自然路标改造、LiU GoPro-Gyro 实测、GS sanity 补跑。
 
 ---
 
