@@ -1,0 +1,49 @@
+# ============================================================
+# selfcalib_baseline —— 忽略规则
+# 仅入库：README/计划、复现脚本、Dockerfile、配置种子、源码 bundle、我方 patches。
+# 排除：数据集原始数据、运行产物、upstream 源码克隆。
+# datasets/ 与 results/ 内需保留的小配置用 `git add -f` 显式纳入（见 README §3）。
+# ============================================================
+
+# 数据集原始数据（TUM-RSVI / LiU GoPro-Gyro 等，下载说明见 README §2）
+datasets/
+
+# 运行日志与临时产物
+logs/
+
+# 标定运行产物（可由脚本复现：导出 csv / 反解结果 / 日志等）
+results/
+
+# upstream 源码克隆（各自带 .git；provenance 以 docker/bundles/*.bundle 保存，改动导出到 patches/）
+*/src_upstream/
+ctrlvio/upstream/
+swift_vio/upstream/
+openvins/upstream/
+karpenko/upstream/
+
+# 由 restore_*.sh 从 bundle 还原的 catkin 构建工作区（可随时重建，不入库）
+swift_vio/ws/
+swift_vio/docker/ws/
+
+# 大文件 / 二进制（bundle 例外，需入库锁 provenance）
+*.bag
+*.zip
+*.tar
+*.mp4
+*.avi
+*.pdf
+*.png
+!docker/bundles/*.bundle
+!*/docker/bundles/*.bundle
+
+# C++ 构建产物
+build/
+*.o
+*.so
+
+# 系统 / 编辑器
+.DS_Store
+*.swp
+.vscode/
+.idea/
+__pycache__/
