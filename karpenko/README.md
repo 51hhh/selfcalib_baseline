@@ -118,6 +118,39 @@ cmake --build build -j
 > 并抬高 RMS。此时应选取以旋转为主、场景较远的片段，或改用带平移的 VIO 类方法
 > （swift_vio / Ctrl-VIO）交叉验证。本地 UZH-FPV 为大平移无人机数据，仅用于验证管线端到端跑通。
 
+### 实测结果（TUM-RSVI seq1，808 帧 / 187k 跟踪点，`--enum-perm`）
+
+真值：RS 目 cam1 `t_RS≈0.03018 s`；GS 目 cam0 `t_RS=0`。用 `common/bag_to_frames.py` 从
+`dataset-seq1.bag` 抽 `/cam1`(RS)、`/cam0`(GS) 帧 + `/imu0` 陀螺，内参取官方 camchain。
+
+| 输入 | t_RS(绝对) | RMS | 说明 |
+|------|-----------|-----|------|
+| cam1 RS（全序列） | 0.0166 s | 19.4 px | 纯旋转模型被平移视差污染，绝对值偏小 |
+| cam0 GS（全序列） | −0.0126 s | 19.3 px | 真值应为 0，负值为同一视差偏置 |
+| cam1 RS 强旋转窗(20–35s) | 0.0023 s | 33 px | 快速旋转→帧间位移大，KLT 退化，更差 |
+
+- **绝对 t_RS 不可靠**：seq1 为手持 6-DOF 行走、近距离室内场景，平移视差（739px 焦距下 ~10cm 平移 /
+  ~2.5m 景深 ≈ 30px）远超卷帘信号，RMS ~19px 即视差噪声地板。这是**方法类的固有限制**（EIS 场景假设旋转为主），
+  非实现缺陷——合成纯旋转自检可将 ts 恢复到 0 误差。
+- **✅ 立体差分可恢复 t_RS**：RS 与 GS 两目刚性同架、视场几乎相同、共享同一平移与场景，
+  视差偏置为**共模**，作差可抵消：`t_RS ≈ ts(cam1) − ts(cam0) = 0.0166 − (−0.0126) = 0.0292 s`，
+  对真值 0.03018 s **误差 ~3%**。故在有 GS 参考目的平移数据上，Karpenko 仍能给出可用的 t_RS 差分估计。
+- 结论：TUM-RSVI 上的**严格** t_RS 以 Ctrl-VIO/swift_vio（建模平移）为准；Karpenko 提供
+  纯陀螺、无加计、无 ROS 的独立交叉核对（自检证实现正确 + 立体差分 ~3%）。
+
+复现命令（结果写入 gitignore 的 `../results/karpenko/`）：
+```bash
+PY=../../.venv/bin/python
+$PY ../common/bag_to_frames.py ../datasets/tum_rsvi/dataset-seq1.bag \
+    ../datasets/tum_rsvi/extracted/seq1_cam1 --cam-topic /cam1/image_raw   # RS
+$PY ../common/bag_to_frames.py ../datasets/tum_rsvi/dataset-seq1.bag \
+    ../datasets/tum_rsvi/extracted/seq1_cam0 --cam-topic /cam0/image_raw   # GS
+./build/karpenko_calib --cam config/tum_rsvi_cam1_rs.yaml --frames ../datasets/tum_rsvi/extracted/seq1_cam1/cam0 \
+    --ts ../datasets/tum_rsvi/extracted/seq1_cam1/video_ts.txt --imu ../datasets/tum_rsvi/extracted/seq1_cam1/imu.txt --enum-perm
+./build/karpenko_calib --cam config/tum_rsvi_cam0_gs.yaml  --frames ../datasets/tum_rsvi/extracted/seq1_cam0/cam0 \
+    --ts ../datasets/tum_rsvi/extracted/seq1_cam0/video_ts.txt --imu ../datasets/tum_rsvi/extracted/seq1_cam0/imu.txt --enum-perm
+```
+
 ---
 
 ## 5. 授权说明

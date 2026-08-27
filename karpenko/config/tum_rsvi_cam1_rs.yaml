@@ -2,12 +2,12 @@
 # 参考标定值（数据集官方 / Ctrl-VIO / swift_vio）：
 #   t_RS (整帧读出时间) ≈ 0.03018 s   (line_delay ≈ 29.4 us/行)
 #   timeshift_cam_imu (td) 量级 ~ ms（依数据段）
-# 内参为该相机的典型标定量级（用你自己数据集中 kalibr/camchain 的真实值替换）。
+# 内参取自数据集官方 camchain（camchain-calibration-equidistant4_camimu_dataset-calib-imu1.yaml 的 cam1）。
 cam1:
   camera_model: pinhole
   distortion_model: equidistant
-  intrinsics: [747.5, 747.4, 618.4, 508.2]
-  distortion_coeffs: [0.019, -0.0155, 0.0175, -0.0075]
+  intrinsics: [739.1654756101043, 739.1438452683457, 625.826167006398, 517.3370973594253]
+  distortion_coeffs: [0.019327620961435945, 0.006784242994724914, -0.008658628531456217, 0.0051893686731546585]
   resolution: [1280, 1024]
   rolling_shutter: true
   # 供参考的官方量级（本方法直接联合估 t_RS，不读此值）：
