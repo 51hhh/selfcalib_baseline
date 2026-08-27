@@ -14,6 +14,20 @@ python3 frames_to_rosbag.py ../../real_frames/uzh_cam0 ../results/uzh_cam0.bag
 ```
 已实测：`real_frames/uzh_cam0` → 1619 帧 + 26836 IMU，读回校验通过。此 bag 用于 swift_vio 的 GS sanity（期望 t_RS≈0）。
 
+## bag_to_frames.py
+`frames_to_rosbag.py` 的**逆操作**：把 ROS1 bag 拆成"图序 + `video_ts.txt` + `imu.txt`"，喂给
+`../karpenko`（纯 C++ 自研法，只吃帧序不吃 bag）。用 `rosbags` 库，**无需装 ROS**。
+
+```bash
+PY=../../.venv/bin/python   # 仓库根 .venv 已装 rosbags
+$PY bag_to_frames.py ../datasets/tum_rsvi/dataset-seq1.bag ../datasets/tum_rsvi/extracted/seq1_cam1 \
+    --cam-topic /cam1/image_raw --imu-topic /imu0        # RS 目（cam1）
+$PY bag_to_frames.py ../datasets/tum_rsvi/dataset-seq1.bag ../datasets/tum_rsvi/extracted/seq1_cam0 \
+    --cam-topic /cam0/image_raw --imu-topic /imu0        # GS 目（cam0，sanity 负样本）
+```
+产出 `cam0/%06d.png`（8-bit；TUM-RSVI 为 mono16 满量程，按 `>>8` 降位）+ `video_ts.txt` + `imu.txt`（7 列）。
+已实测：seq1 → 808 帧 + 8119 IMU。
+
 ## download_tumrsvi.sh
 下载 TUM Rolling-Shutter 数据集到 `../datasets/tum_rsvi/`（`curl -C -` 断点续传）。
 
