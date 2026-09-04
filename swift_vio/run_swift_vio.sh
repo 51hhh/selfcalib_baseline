@@ -11,7 +11,7 @@
 # 默认：
 #   config = config/config_tum_rs_calib.yaml   (已开 sigma_td/sigma_tr)
 #   话题   = /cam0/image_raw /cam1/image_raw /imu0   (TUM-RSVI rosbag 约定)
-# 输出：  results/<bag名>/  下的 swift_vio 状态与标定 csv
+# 输出：默认 results/<bag名>/；SELFCALIB_OUTPUT_DIR 可指定统一数据集输出目录。
 #
 # 数据来源二选一：
 #   (A) TUM-RSVI 官方 rosbag（真值 t_RS≈0.03018s，右目 RS / 左目 GS）—— 主测。
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCKER="${DOCKER:-sudo docker}"
+read -r -a DOCKER_CMD <<< "${DOCKER:-sudo docker}"
 IMAGE="${IMAGE:-swift_vio:melodic}"
 
 # 默认＝实测可用配方：单目 cam1(RS) + MSCKF + down_scale:1（见 config 文件头 §排错）。
@@ -43,11 +43,16 @@ else
 fi
 
 [ -f "$BAG" ]            || { echo "找不到 bag: $BAG" >&2; exit 1; }
-[ -f "$HERE/$CONFIG" ]   || { echo "找不到 config: $HERE/$CONFIG" >&2; exit 1; }
+if [[ "$CONFIG" = /* ]]; then
+  CONFIG_HOST="$CONFIG"
+else
+  CONFIG_HOST="$HERE/$CONFIG"
+fi
+[ -f "$CONFIG_HOST" ] || { echo "找不到 config: $CONFIG_HOST" >&2; exit 1; }
 
 BAGNAME="$(basename "$BAG" .bag)"
-OUTDIR="results/$BAGNAME"
-mkdir -p "$HERE/$OUTDIR"
+OUTDIR_HOST="${SELFCALIB_OUTPUT_DIR:-$HERE/results/$BAGNAME}"
+mkdir -p "$OUTDIR_HOST"
 
 # 把 swift_vio/ 挂到 /work，bag 目录挂到 /data
 BAGDIR="$(cd "$(dirname "$BAG")" && pwd)"
@@ -55,28 +60,30 @@ BAGBASE="$(basename "$BAG")"
 
 echo ">> swift_vio 离线标定"
 echo "   bag    : $BAG"
-echo "   config : $CONFIG"
+echo "   config : $CONFIG_HOST"
 echo "   topics : $CAM_TOPICS , $IMU"
-echo "   output : $OUTDIR/  (dump_output_option=3 -> 全部标定量 csv)"
+echo "   output : $OUTDIR_HOST/  (dump_output_option=3 -> 全部标定量 csv)"
 
 # 交互终端才加 -it；无 tty（后台/CI）时省略，避免 "input device is not a TTY"
 TTY_FLAGS=""; [ -t 0 ] && [ -t 1 ] && TTY_FLAGS="-it"
-$DOCKER run --rm $TTY_FLAGS \
-  -v "$HERE":/work \
-  -v "$BAGDIR":/data \
+"${DOCKER_CMD[@]}" run --rm $TTY_FLAGS \
+  -v "$HERE":/work:ro \
+  -v "$CONFIG_HOST":/input/config.yaml:ro \
+  -v "$BAGDIR":/data:ro \
+  -v "$OUTDIR_HOST":/output \
   "$IMAGE" bash -lc "
-    source /swift_vio_ws/devel/setup.bash && cd /work &&
+    source /swift_vio_ws/devel/setup.bash && cd /output &&
     ( roscore >/tmp/roscore.log 2>&1 & ) && sleep 5 &&
-    rosrun swift_vio swift_vio_node_synchronous /work/$CONFIG \
+    rosrun swift_vio swift_vio_node_synchronous /input/config.yaml \
       --bagname=/data/$BAGBASE \
       --camera_topics='$CAM_TOPICS' \
       --imu_topic='$IMU' \
       --load_input_option=1 \
       --dump_output_option=3 \
-      --output_dir=/work/$OUTDIR 2>&1 | tee /work/$OUTDIR/run.log
+      --output_dir=/output 2>&1 | tee /output/run.log
   "
 
 echo
 echo ">> 完成。查看结果："
-echo "   grep -i 'readout\\|time.*offset\\|td' $OUTDIR/run.log"
-echo "   ls $OUTDIR/*.csv   # 末行即收敛标定量（readout t_r、td、内外参、IMU 内参）"
+echo "   grep -i 'readout\\|time.*offset\\|td' $OUTDIR_HOST/run.log"
+echo "   ls $OUTDIR_HOST/*.csv   # 末行即收敛标定量（readout t_r、td、内外参、IMU 内参）"

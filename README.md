@@ -8,6 +8,25 @@
 
 本 README 既是项目说明，也是**完整复现计划**（Plan）。调研出处见 `../README.md`（根调研文档）。
 
+## A350 规范数据集入口
+
+统一入口只读 `datasets/<id>/raw/`，输出到
+`outputs/<id>/selfcalib_baseline/<run-id>/{work,results,logs}`：
+
+```bash
+# A350 现有实机配置可直接跑 Swift-VIO（先 dry-run）
+./run_dataset.sh --dataset a350_20260901T163509_eis_motion \
+  --method swift --run-id swift-a350-v1 --dry-run
+
+# Karpenko 会先 GPU 恢复 4:3，再抽取可复现图序
+./run_dataset.sh --dataset a350_20260901T163509_eis_motion \
+  --method karpenko --run-id karpenko-a350-v1 --dry-run
+```
+
+Ctrl-VIO 仓库目前只有 TUM-RSVI 参数，A350 运行必须显式给 `--config`；统一入口不会将
+TUM 的 1280×1024、200 Hz 配置错误套用到 A350。Swift-VIO 保持录制的 3840×2160 域，
+Karpenko 使用 3840×2880 方像素域，因此两者会在各自 run manifest 中固定实际 config 与哈希。
+
 ### 进度状态（2026-08-27 更新：三方法均已在 TUM-RSVI seq1 实测完成）
 
 - ✅ **阶段 0 完成**：目录骨架 + `.gitignore`；`common/frames_to_rosbag.py` 合成自检 + 实测通过。

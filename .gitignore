@@ -39,6 +39,7 @@ swift_vio/docker/ws/
 
 # C++ 构建产物
 build/
+build_stale_pre_reorg/
 *.o
 *.so
 
