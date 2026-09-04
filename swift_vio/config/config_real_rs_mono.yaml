@@ -1,0 +1,153 @@
+%YAML:1.0
+# ============================================================================
+# selfcalib_baseline / swift_vio —— 自录实机 RS 镜头 单目联合自标定 (t_r + td)
+# 派生自 config_tum_rs_cam1_mono.yaml（唯一实测可跑通的配方：单目 + down_scale:1
+# + maxInStateLandmarks:0 纯 MSCKF，三处上游堆损坏的绕法见该文件头 §排错）。
+#
+# 历史数据: A350 自然场景 c3w 段（1200 帧 3840x2160 + 799Hz IMU）。本文件只作实机
+# 参数种子；迁移到新的 canonical dataset 后必须由运行 manifest 记录 dataset_id 和输入哈希。
+# 相机: 等距鱼眼(equidistant)，内参/畸变 = OpenCV 联合 BA 定稿值
+# T_SC: 取自 rscalib 功能2 的 T_cam_imu（与 kalibr② 结果差 <2e-4）
+# image_readout_time 初值 0.01296 s = 6.0us/行 x 2160 行，与其它各法同一中性初值
+# ============================================================================
+cameras:
+     - {T_SC:
+        [-0.0022862232032086487, -0.99999194760399113,  0.003298167770160555,  0.0065339714144484178,
+         -0.99998761915843115,    0.002271611089553482, -0.0044273369996752085, 0.000109260635850382,
+          0.0044198091945225207, -0.0033082488166450096, -0.99998476027210026, -0.019615160575113842,
+          0.0, 0.0, 0.0, 1.0],
+        image_dimension: [3840, 2160],
+        distortion_coefficients: [0.030140235666881888, 0.074335055529403338, -0.02585714193629891, -0.00015711612778715535],
+        distortion_type: equidistant,
+        focal_length: [1562.1599728333347, 1170.4354187409733],
+        principal_point: [1895.2120663952558, 1074.6679660314608],
+        down_scale: 1,
+        projection_opt_mode: FIXED,
+        extrinsic_opt_mode: FIXED,
+        image_delay: 0.0,
+        image_readout_time: 0.01296}
+
+monocular_input: true
+
+camera_params:
+    camera_rate: 60
+    sigma_absolute_translation: 0.0
+    sigma_absolute_orientation: 0.0
+    sigma_c_relative_translation: 0.0
+    sigma_c_relative_orientation: 0.0
+    timestamp_tolerance: 0.005
+    sigma_focal_length: 0.0
+    sigma_principal_point: 0.0
+    sigma_distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
+    sigma_td: 5e-3     # >0 : 在线估计 td（相机-IMU 时间偏移）
+    sigma_tr: 5e-3     # >0 : 在线估计 t_r（卷帘逐行读出时间）
+
+# IMU 噪声沿用上游 TUM 松参档（sigma_g_c 4e-3 / sigma_a_c 7e-2），未换成本机实测值
+# (1.7078e-4 / 7.8012e-3)：实测紧参在 Ctrl-VIO 上使 line delay railing 到上界，
+# 滤波器对 IMU 过度自信更敏感。见 xbase/logs/ctrlvio.log(紧) 与 ctrlvio_loose.log(松)。
+imu_params:
+    a_max: 176.0
+    g_max: 7.8
+    sigma_g_c: 0.004
+    sigma_a_c: 0.07
+    sigma_bg: 0.03
+    sigma_ba: 0.1
+    sigma_gw_c: 0.000044
+    sigma_aw_c: 0.00172
+    tau: 3600.0
+    g: 9.80766
+    a0: [ 0.0, 0.0, 0.0 ]
+    imu_rate: 799
+    T_BS:
+        [1.0000, 0.0000, 0.0000, 0.0000,
+         0.0000, 1.0000, 0.0000, 0.0000,
+         0.0000, 0.0000, 1.0000, 0.0000,
+         0.0000, 0.0000, 0.0000, 1.0000]
+    sigma_TGElement: 0.0
+    sigma_TSElement: 0.0
+    sigma_TAElement: 0.0
+    model_type: BG_BA
+
+initial_state:
+    std_v_WS: [0.1, 0.1, 0.1]
+    std_q_WS: [0.2, 0.2, 0.05]
+    std_p_WS: [0.1, 0.1, 0.1]
+
+numKeyframes: 5
+numImuFrames: 3
+optimization:
+    triangulationMaxDepth: 1000.0
+    algorithm: "HybridFilter"
+    useEpipolarConstraint: false
+    cameraObservationModelId: 0
+    computeOkvisNees: 0
+    useMahalanobisGating: 1
+    maxProjectionErrorTol: 7
+
+frontend:
+    stereoMatchWithEpipolarCheck: true
+    epipolarDistanceThreshold: 2.5
+    featureTrackingMethod: 0
+
+point_landmark:
+    landmarkModelId: 1
+    minTrackLength: 3
+    minTrackLengthForSlam: 7
+    maxHibernationFrames: 3
+    maxInStateLandmarks: 0    # 纯 MSCKF（见文件头 §3）
+    maxMarginalizedLandmarks: 50
+
+pose_graph:
+    maxOdometryConstraintForAKeyframe: 2
+
+ceres_options:
+    minIterations: 3
+    maxIterations: 10
+    timeLimit: -1
+
+detection_options:
+    threshold: 40.0
+    octaves: 0
+    maxNoKeypoints: 400
+
+imageDelay: 0.0   # td 初值（VISensor 为 0；自定义采集需标定）
+
+displayImages: false
+useDriver: false
+
+publishing_options:
+    publish_rate: 200
+    publishLandmarks: false
+    landmarkQualityThreshold: 1.0e-2
+    maximumLandmarkQuality: 0.05
+    maxPathLength: 20
+    publishImuPropagatedState: false
+    T_Wc_W:
+        [1.0000, 0.0000, 0.0000, 0.0000,
+         0.0000, 1.0000, 0.0000, 0.0000,
+         0.0000, 0.0000, 1.0000, 0.0000,
+         0.0000, 0.0000, 0.0000, 1.0000]
+    trackedBodyFrame: B
+    velocitiesFrame: Wc
+
+backend_modality: 0
+smartNoiseSigma: 1.5
+rankTolerance: 1.0
+landmarkDistanceThreshold: 20.0
+outlierRejection: 8.0
+retriangulationThreshold: 1.0e-3
+addBetweenStereoFactors: 0
+betweenRotationPrecision: 0.0
+betweenTranslationPrecision: 100
+relinearizeThreshold: 1.0e-2
+relinearizeSkip: 1.0
+numOptimize: 1
+wildfire_threshold: 0.001
+useDogLeg: 0
+initialLambda: 0.0
+lowerBoundLambda: 0.0
+upperBoundLambda: 0.0
+zeroVelocitySigma: 1.0e-3
+noMotionPositionSigma: 1.0e-3
+noMotionRotationSigma: 1.0e-4
+constantVelSigma: 1.0e-2

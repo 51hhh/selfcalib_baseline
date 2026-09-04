@@ -13,6 +13,7 @@ logs/
 
 # 标定运行产物（可由脚本复现：导出 csv / 反解结果 / 日志等）
 results/
+/karpenko/result_*.yaml
 
 # upstream 源码克隆（各自带 .git；provenance 以 docker/bundles/*.bundle 保存，改动导出到 patches/）
 */src_upstream/

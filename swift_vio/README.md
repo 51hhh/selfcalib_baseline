@@ -35,6 +35,7 @@ swift_vio/
 ├── config/
 │   ├── config_tum_rs_cam1_mono.yaml       # ★可用配方：单目 cam1(RS)+MSCKF+ds1（默认 config）
 │   ├── config_tum_rs_cam0_gs_mono.yaml    # 单目 cam0(GS) 对照（读出应自标出 ≈0）
+│   ├── config_real_rs_mono.yaml            # A350 3840x2160 实机参数种子（当前数据需重新验收）
 │   ├── config_tum_rs_calib.yaml           # 意图配置：立体双目 HybridFilter（因上游 bug 会崩，留档）
 │   └── config_tum_rs_upstream_baseline.yaml  # 纯上游配置（sigma_td/tr=0），复现崩溃/溯源用
 ├── docker/
@@ -150,6 +151,7 @@ rosrun swift_vio swift_vio_node_synchronous config/config_tum_rs_cam1_mono.yaml 
 |---|---|---|---|---|
 | `config_tum_rs_cam1_mono.yaml` | 单目 cam1 RS | 1 | 0（纯 MSCKF） | ★可用，跑满全程 |
 | `config_tum_rs_cam0_gs_mono.yaml` | 单目 cam0 GS | 1 | 0 | 对照，跑满全程 |
+| `config_real_rs_mono.yaml` | A350 单目 RS | 1 | 0 | 实机参数种子；切换新数据集后必须重新验收 |
 | `config_tum_rs_calib.yaml` | 立体 GS+RS | 1 | 50（HybridFilter） | 意图配置，因 §6 bug 会崩 |
 | `config_tum_rs_upstream_baseline.yaml` | 立体 | 2 | 50 | 纯上游（sigma_td/tr=0），复现崩溃 |
 
