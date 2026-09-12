@@ -27,7 +27,8 @@ Options:
   --output-root DIR      Output root (default: <collection>/outputs)
   --run-id ID            Immutable run name
   --rscalib-build DIR    Build containing native preparation tools
-  --dry-run              Validate inputs and print the complete plan
+  --dry-run              Check required paths/executables and print the plan;
+                         does not validate manifest contents or media integrity
 EOF
 }
 

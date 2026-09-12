@@ -9,17 +9,18 @@
 ```bash
 pip install rosbags                                   # 唯一依赖（+ numpy/opencv）
 python3 frames_to_rosbag.py --selftest               # 合成自检（序列化往返，已验证通过）
-python3 frames_to_rosbag.py ../../real_frames/uzh_cam0 ../results/uzh_cam0.bag
+python3 frames_to_rosbag.py /path/to/prepared_frames ../results/uzh_cam0.bag
 #  -> /cam0/image_raw (mono8) + /imu0 (sensor_msgs/Imu)
 ```
-已实测：`real_frames/uzh_cam0` → 1619 帧 + 26836 IMU，读回校验通过。此 bag 用于 swift_vio 的 GS sanity（期望 t_RS≈0）。
+历史实测记录为：UZH-FPV 准备目录 → 1619 帧 + 26836 IMU，读回校验通过。该准备目录不在本仓库；
+复现时需重新生成，并固定输入来源和哈希。此类 bag 可用于 Swift-VIO 的 GS sanity（期望 t_RS≈0）。
 
 ## bag_to_frames.py
 `frames_to_rosbag.py` 的**逆操作**：把 ROS1 bag 拆成"图序 + `video_ts.txt` + `imu.txt`"，喂给
 `../karpenko`（纯 C++ 自研法，只吃帧序不吃 bag）。用 `rosbags` 库，**无需装 ROS**。
 
 ```bash
-PY=../../.venv/bin/python   # 仓库根 .venv 已装 rosbags
+PY=${PYTHON:-python3}       # 运行环境需安装 rosbags
 $PY bag_to_frames.py ../datasets/tum_rsvi/dataset-seq1.bag ../datasets/tum_rsvi/extracted/seq1_cam1 \
     --cam-topic /cam1/image_raw --imu-topic /imu0        # RS 目（cam1）
 $PY bag_to_frames.py ../datasets/tum_rsvi/dataset-seq1.bag ../datasets/tum_rsvi/extracted/seq1_cam0 \

@@ -1,12 +1,13 @@
 # selfcalib_baseline —— 自然场景（无标定板）离线联合标定 t_RS + td 的复现基线
 
-> 创建日期：2026-08-26
+> 创建日期：2026-08-26；文档状态更新：2026-09-12
 > 定位：作为 `../kalibr_baseline`（标定板基线）与 `../rscalib`（自研纯 C++ 板法移植）的**姊妹项目**，
 > 收录"**录一段运动视频 + 同步 IMU → 离线标定卷帘读出时间 t_RS 与相机-IMU 时间偏移 td**"的
 > 几条**自然场景 / 无标定板**方法的可复现基线与自研复现。
 > 用途：为 gyro-EIS 系统提供不依赖标定板、不依赖 LED 频闪的 t_RS/td 标定路线，并与板法基线交叉验证。
 
-本 README 既是项目说明，也是**完整复现计划**（Plan）。调研出处见 `../README.md`（根调研文档）。
+本 README 汇总当前可运行方法、实测证据和仍未实现的计划项。已完成状态以本文件开头的结果表和
+各方法子目录 README 为准；历史调研计划仅用于解释选择过程，不代表对应目录或功能已经存在。
 
 ## A350 规范数据集入口
 
@@ -27,7 +28,7 @@ Ctrl-VIO 仓库目前只有 TUM-RSVI 参数，A350 运行必须显式给 `--conf
 TUM 的 1280×1024、200 Hz 配置错误套用到 A350。Swift-VIO 保持录制的 3840×2160 域，
 Karpenko 使用 3840×2880 方像素域，因此两者会在各自 run manifest 中固定实际 config 与哈希。
 
-### 进度状态（2026-08-27 更新：三方法均已在 TUM-RSVI seq1 实测完成）
+### 进度状态（2026-09-12 核对：阶段 1/2/4 三种已采纳方法均已在 TUM-RSVI seq1 实测）
 
 - ✅ **阶段 0 完成**：目录骨架 + `.gitignore`；`common/frames_to_rosbag.py` 合成自检 + 实测通过。
 - ✅ **数据就绪**：**TUM-RSVI seq1**（4.24 GB，rosbags 校验）——40.4 s，cam0(GS)/cam1(RS) 各 808 帧
@@ -59,7 +60,7 @@ Karpenko 使用 3840×2880 方像素域，因此两者会在各自 run manifest 
 
 - 现状：板法侧已复现完毕——`kalibr_baseline`（双 Kalibr ROS1 基线 + Huai 2022 连续时间 §4.1 RS 仿真闭环）
   与 `rscalib`（纯 C++ 无 ROS 移植，功能 2 `imucam_rs` 一次出 lineDelay+td+T_cam_imu）。
-- 需求（根调研文档 §0.2）：**录一段相机运动视频（含同步 gyro/IMU）即完成 t_RS 与 td 标定；
+- 需求：**录一段相机运动视频（含同步 gyro/IMU）即完成 t_RS 与 td 标定；
   标定板或纯自然场景皆可；不使用额外硬件（无 LED 频闪）、不查现成相机数据库。**
 - 本项目聚焦其中的**自然场景路线**，且严格限定"**离线**"（先录制、后批处理），不做实时 VIO。
 
@@ -67,9 +68,10 @@ Karpenko 使用 3840×2880 方像素域，因此两者会在各自 run manifest 
 1. **td 本质是 gyro↔video 时钟差，纯图像标不出 td**——所有方法必须带同步 IMU/gyro。
 2. **t_RS 需运动激发**——旋转对 RS 信号最强；滤波/连续时间路线还需**加速度计 + 充分 6 轴激励**，
    Karpenko 纯陀螺法可省加速度计。
-3. 本地已确认数据 `../real_frames/uzh_cam0/`（UZH-FPV cam0，1619 帧 640×480 灰度 + `video_ts.txt`
-   + `imu.txt/csv` 7 列含**加速度计**）——数据形态可喂全部路线；但它是**全局快门(GS)**，只能作
-   sanity-check（期望标出 t_RS≈0），真值非零 RS 需用 TUM-RSVI 或仿真注入。
+3. 历史 UZH-FPV cam0 准备目录曾包含 1619 帧 640×480 灰度图、`video_ts.txt` 和带加速度计的
+   7 列 IMU，可喂全部路线；但该目录不在本仓库，复现时需从来源 bag 重新生成。UZH-FPV cam0
+   是**全局快门(GS)**，只能作 sanity-check（期望标出 t_RS≈0）；真值非零 RS 需用 TUM-RSVI
+   或仿真注入。
 
 ---
 
@@ -100,7 +102,7 @@ Karpenko 使用 3840×2880 方像素域，因此两者会在各自 run manifest 
 |---|---|---|---|---|---|
 | **TUM-RSVI**（首选） | https://cvg.cit.tum.de/data/datasets/rolling-shutter-dataset ；CDN https://cdn3.vision.in.tum.de/rolling/ | 双目（**左 GS + 右 RS** 同序列）1280×1024@20Hz + BMI160 六轴 200Hz + OptiTrack 真值轨迹 | **line delay≈29.4737µs/行 → 整帧 0.03018s**（1024×29.47µs），GS 目≈0 | 三法主测集，自带 t_RS 正/负样本；bag 与 EuRoC 双格式 | **seq1 已下载+校验**（4.24GB，40.4s，cam0/cam1 各 808 帧 + imu0 8119 + vrpn 真值） |
 | **TUM-VI** | 已在 `../kalibr_baseline/datasets/tumvi` 流程内 | GS 双目 + 六轴 IMU + 动捕 | t_RS≈0、td 已标定 | GS sanity-check（KSWF 论文同款用法） | 复用 |
-| **UZH-FPV / real_frames** | `../real_frames/uzh_cam0`（已抽好帧+ts+imu，含加计） | GS 640×480 + 六轴 | t_RS≈0 | 本地即用 sanity-check | 已有 |
+| **UZH-FPV / 历史 real_frames 格式** | 需由 UZH-FPV bag 重新抽取；`../real_frames/uzh_cam0` 不属于本仓库 | GS 640×480 + 六轴 | t_RS≈0 | 可选 GS sanity-check | 当前工作区未提供 |
 | **LiU GoPro-Gyro** | http://www.cvl.isy.liu.se/research/datasets/gopro-gyro-dataset/ | 1080p30 视频 + **仅陀螺** csv | 参考 readout≈0.0317s（非计量金标准） | Karpenko 纯陀螺法实测 | 待下载 |
 | **kalibr_baseline 仿真闭环** | `../kalibr_baseline/run_sim.sh` | GS 拟合 B 样条 → 注入已知 line_delay 合成 RS | **注入值即真值**（137500/82500/51563/41250 ns 四档） | 造带真值数据；**需改造**：观测从 AprilGrid 换随机自然路标才能喂自然场景法 | 待改造 |
 
@@ -121,7 +123,7 @@ selfcalib_baseline/
 ├── common/
 │   ├── frames_to_rosbag.py       # frames+video_ts.txt+imu.txt → ROS1 bag（rosbags 库，无需装 ROS）
 │   │                             #   逆用 ../rscalib/test/real_equiv/extract_bag.py 的约定
-│   └── sim_natural_rs.py         # 改造 kalibr_baseline 闭环：GS 样条+注入 line_delay+随机自然路标 → 带真值 RS 序列
+│   └── bag_to_frames.py          # ROS1 bag → 帧序列+video_ts.txt+imu.txt
 ├── ctrlvio/                      # 阶段1：t_RS 基线
 │   ├── README.md                 # 构建/运行/结果读取
 │   ├── docker/Dockerfile.melodic # ROS1 Melodic + Ceres1.14 + OpenCV3.3 + vendored basalt/sophus
@@ -136,11 +138,6 @@ selfcalib_baseline/
 │   ├── docker/patches/           # 构建期防御补丁（零空间 rows<=cols 守卫）
 │   ├── config/*.yaml             # 单目 cam1/cam0 可用配方 + 立体意图配置 + 纯上游配置
 │   └── run_swift_vio.sh          # node_synchronous；load_input_option=1 / dump_output_option=3 导 CSV
-├── openvins/                     # 阶段3（可选）：td 交叉核对
-│   ├── README.md
-│   ├── docker/                   # 复用官方 Dockerfile_ros1_20_04
-│   ├── config/                   # kalibr_imucam_chain.yaml + estimator_config.yaml（calib_cam_timeoffset:true）
-│   └── run_openvins_serial.sh    # ros1_serial_msckf 离线
 ├── karpenko/                     # 阶段4：自研纯陀螺复现（C++）
 │   ├── README.md
 │   ├── src/                      # 复用 rscalib I/O + B样条 + gyro先验；新增 KLT + 坐标下降/LM
@@ -148,6 +145,9 @@ selfcalib_baseline/
 ├── datasets/                     # 不入库；配置种子入库（tum_rsvi camchain/imu 种子等）
 └── results/                      # 不入库；参考真值/对照配置种子入库
 ```
+
+阶段 3 OpenVINS 和 `common/sim_natural_rs.py` 仍是计划项，当前仓库中没有相应目录/文件；
+不要按目录树假定它们已经可运行。
 
 ---
 
@@ -157,11 +157,12 @@ selfcalib_baseline/
 
 ### 阶段 0：脚手架 + 数据转换（无 ROS，纯 Python）
 - 建目录骨架 + `.gitignore`（仿 kalibr_baseline）。
-- `common/frames_to_rosbag.py`：把 `../real_frames/uzh_cam0`（帧序列 + `video_ts.txt` + `imu.txt`）
+- `common/frames_to_rosbag.py`：把符合约定的帧序列 + `video_ts.txt` + `imu.txt`
   打成 ROS1 bag（图像→`/cam0/image_raw`，IMU→`/imu0`），用 `rosbags` 库**无需装 ROS**（参照
   `../rscalib/test/real_equiv/extract_bag.py` 的反向）。含合成自检。
 - 依赖：Python + `rosbags`、numpy、opencv。**无 ROS、无 Docker。**
-- 交付：`real_frames/uzh_cam0` → `uzh_cam0.bag`，供各外部基线离线回放。
+- 交付：规范帧目录 → ROS1 bag，供外部基线离线回放。历史 `../real_frames/uzh_cam0`
+  路径不在本仓库，使用前需从来源 bag 重新生成或显式提供。
 
 ### 阶段 1：Ctrl-VIO 基线（t_RS）★首选起步
 - 目标：自然场景离线标出**每行延时 t_r**，换算整帧 t_RS。
@@ -180,7 +181,7 @@ selfcalib_baseline/
   1. **恢复源码**：原仓 404，从 Software Heritage 存档或派生 `github.com/wbl1997/my_swift_vio`（含 RS 分支）取回，
      连同依赖 `JzHuai0108/vio_common`；核对可编译后打 bundle 入 `swift_vio/docker/bundles/`；
   2. 写 `Dockerfile.melodic`（ROS1 + Ceres14 + Eigen≥3.3.4 + Boost + glog + BRISK + gtsam(可选) + SuiteSparse）；
-  3. 离线入口二选一：`load_input_option=1`（**直读 `../real_frames` 的帧序列 + imu.txt**，最省事）或
+  3. 离线入口二选一：`load_input_option=1`（读取已准备的帧序列 + imu.txt）或
      `swift_vio_node_synchronous`（同步读 bag）；
   4. 配置 `sigma_td=5e-3`（开 td）、`sigma_tr=5e-3`（开 readout）、`imageDelay`/`image_readout_time` 初值；
      `dump_output_option=3` 导出全部标定量 CSV。
@@ -206,7 +207,7 @@ selfcalib_baseline/
 - **需新写**（rscalib 里没有）：KLT/SIFT 相邻帧特征跟踪 + RANSAC（OpenCV 直接有）、陀螺积分+SLERP 姿态、
   低维优化器（坐标下降几十行，或接 rscalib 的 aslam 后端/自带 Ceres）。
 - 依赖：C++ / Eigen / OpenCV（**无 ROS**）；GPL-3 注意——参考算法重写，勿直接拷贝 alex-golts 代码。
-- 数据：本地 `real_frames`（陀螺列即可）做 sanity（GS→ts≈0）；LiU GoPro-Gyro 做真值实测（≈0.0317s）；
+- 数据：可重新生成的 UZH-FPV 帧目录（陀螺列即可）做 sanity（GS→ts≈0）；LiU GoPro-Gyro 做真值实测（≈0.0317s）；
   kalibr_baseline 仿真注入档做已知真值回归。
 - 验证：与 Ctrl-VIO（t_RS）、swift_vio（t_RS+td）、rscalib 板法三方交叉对照。
 
@@ -220,7 +221,7 @@ selfcalib_baseline/
 | TUM-RSVI 左目 cam0 (GS) | ≈0 | ≈0 | 2 | ✅ swift_vio t_r≈−0.19ms、td≈0.13ms（对照通过） |
 | TUM-RSVI 立体差分 (RS−GS) | ≈0.03018s | — | 4 | ✅ Karpenko t_RS≈0.03057s（+1.28%，共模差分） |
 | Karpenko 合成自检（非循环） | =注入值 | =注入值 | 4 | ✅ ts 误差 0、td 误差 0（物理约定生成，校验手性） |
-| real_frames/uzh_cam0 (GS) | ≈0 | ≈UZH 标定值 | 2,4 (sanity) | 未跑（可选） |
+| UZH-FPV 重新抽取帧 (GS) | ≈0 | ≈UZH 标定值 | 2,4 (sanity) | 输入当前未提供、未跑（可选） |
 | kalibr_baseline 仿真注入 | =注入档 | =注入 td | 1,2,4 | 未跑（可选） |
 | LiU GoPro-Gyro | ≈0.0317s | 方法自估 | 4 | 未下载（可选） |
 
@@ -243,7 +244,6 @@ Karpenko(双目一致 −9.5ms) 给出（Ctrl-VIO 锁死无输出）。
 ---
 
 ## 附：关键出处
-- 根调研文档：`../README.md`（§2.4/2.5/2.6/2.8/2.9、§4 开源清单）。
 - 板法基线：`../kalibr_baseline/README.md`（bundle/patches/docker/仿真闭环范式）。
 - 自研板法移植与可复用资产：`../rscalib/`（I/O 层、B 样条逐行 keypointTime、td/gyro 先验、IMU 误差项）。
-- 论文/仓库链接见 §1、§2 表内。所有仓库状态经 2026-08-26 GitHub API / WebFetch 实地核实。
+- 论文/仓库链接见 §1、§2 表内；外部仓库可用性会变化，bundle 中固定的快照才是本项目的复现依据。

@@ -86,7 +86,7 @@ cmake --build build -j
 
 ## 3. 运行
 
-数据格式沿用 rscalib 约定（`rscalib/docs/02-IO层-数据格式协定.md`）：
+数据格式沿用 rscalib 约定（`../../rscalib/docs/02-IO层-数据格式协定.md`）：
 帧序列 `cam0/%06d.png`、`video_ts.txt`（每行一个秒级时间戳）、
 `imu.txt`（7 列 `t wx wy wz ax ay az` 或 4 列 `t wx wy wz`，只用陀螺）、
 相机内参 kalibr camchain yaml。
@@ -94,9 +94,9 @@ cmake --build build -j
 ```bash
 ./build/karpenko_calib \
   --cam    config/uzh_cam0_gs.yaml \
-  --frames ../../real_frames/uzh_cam0/cam0 \
-  --ts     ../../real_frames/uzh_cam0/video_ts.txt \
-  --imu    ../../real_frames/uzh_cam0/imu.txt \
+  --frames /path/to/prepared_frames/cam0 \
+  --ts     /path/to/prepared_frames/video_ts.txt \
+  --imu    /path/to/prepared_frames/imu.txt \
   --out    result_karpenko.yaml \
   [--enum-perm] [--ts-init 0.03] [--td-init 0.0]
 ```

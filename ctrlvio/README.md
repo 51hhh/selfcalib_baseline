@@ -62,7 +62,8 @@ BMI160 六轴 200Hz（/imu0）；OptiTrack 真值轨迹。默认配置标定 **�
 - 收敛日志：glog `[line_delay] 2.9899e-05`（388 个样本，末段抖动 <0.02µs）；
   控制台 `estimated line delay: 29.8986us`。产物在 `../results/ctrlvio/dataset-seq1/`（不入库）。
 - **+1.44% 是本项目对 t_RS 精度最高的结果**（连续时间 B 样条 + 完整 VIO 观测），
-  作为其余方法的 t_RS 基准：swift_vio 单目 26.71µs/行(−9.4%)、Karpenko 差分 0.0292s(~3%) 均与之同号同量级。
+  作为其余方法的 t_RS 基准：swift_vio 单目 26.71µs/行(−9.4%)、Karpenko 立体差分
+  0.03057s(+1.28%) 均与之同号同量级。
 
 ## 验证判据
 | 输入 | 相机 | 期望 line_delay(每行) | 期望整帧 t_RS | 实测 |
@@ -80,4 +81,5 @@ BMI160 六轴 200Hz（/imu0）；OptiTrack 真值轨迹。默认配置标定 **�
 ## 局限与去向
 - 只出 t_RS；td 需 `../swift_vio`（联合 t_RS+td）或 `../karpenko`（纯陀螺 t_RS+td）。
 - 环境老（Melodic/Ceres1.14/OpenCV3），已用 Docker 隔离。
-- 交叉验证：同序列 t_RS 与 swift_vio、Karpenko、`../../rscalib` 板法结果对照，差异应 <1%。
+- 交叉验证：同序列 t_RS 与 swift_vio、Karpenko、`../../rscalib` 板法结果对照，并分别报告输入模型、
+  估计类型（绝对量或立体差分）和相对真值误差；不设置跨方法统一的 `<1%` 判据。
